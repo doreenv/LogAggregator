@@ -69,7 +69,13 @@ public class Agent {
 					chunkSequenceNumber++;
 					numberOfLinesRead = 0;
 				}
-			} catch (InterruptedException | IOException e) {
+			} catch (InterruptedException e) {
+				LOGGER.severe("Exception while thread sleeping waiting for additional log lines");
+				e.printStackTrace();
+				keepReading = false;
+			} catch (IOException e) {
+				LOGGER.severe("IO Exception while attempting to read next log file line");
+				e.printStackTrace();
 				keepReading = false;
 			}
 		}
