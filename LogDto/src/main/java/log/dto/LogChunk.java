@@ -36,4 +36,10 @@ public class LogChunk {
 		this.agentId = agentId;
 	}
 	
+	public String toString() {
+		StringBuffer result = new StringBuffer();
+		result.append("agentId: ").append(agentId).append(", sequenceNumber: ").append(sequenceNumber).append(", content:\n").append(content);
+		return  result.toString();
+	}
+	
 }

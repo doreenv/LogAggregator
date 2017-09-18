@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +30,9 @@ public class LogAggregationController {
 	// TODO periodically kill services that weren't active in a while
 	private Map<String, LogAggregationService> services;
 	
+	@Autowired
+	private ApplicationContext appContext;
+	
 	public LogAggregationController() {
 		services = new HashMap<String, LogAggregationService>();
 	}
@@ -39,14 +44,17 @@ public class LogAggregationController {
 	
 	@RequestMapping(value = "/", method = RequestMethod.POST)
 	public ResponseEntity<?> receiveLogChunk(@RequestBody LogChunk chunk, UriComponentsBuilder ucBuilder) {
-		LOGGER.info("Received a chunk! agentId: " + chunk.getAgentId() + " content: " + chunk.getContent());
+		LOGGER.info("Received a chunk! " + chunk.toString());
+
 		LogAggregationService service = services.get(chunk.getAgentId());
         HttpHeaders headers = new HttpHeaders();
         headers.setLocation(ucBuilder.path("/logAggregation/").build().toUri());
 		ResponseEntity<String> response = null;
+		
 		try {
 			if (service == null) {
-				service = new LogAggregationService(chunk.getAgentId());
+				service = appContext.getAutowireCapableBeanFactory().createBean(LogAggregationService.class);
+				service.setAgentId(chunk.getAgentId());
 				services.put(chunk.getAgentId(), service);
 			}
 			service.addLogChunk(chunk);

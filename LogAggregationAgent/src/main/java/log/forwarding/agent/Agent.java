@@ -8,6 +8,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -15,29 +20,38 @@ import org.springframework.web.client.RestTemplate;
 
 import log.dto.LogChunk;
 
+/**
+ * @author doreenvanunu
+ *
+ * Log forwarding agent - tails a log file and sends the content in chunks to a log aggregation service
+ */
+@Configuration
+@PropertySource("classpath:agent.properties")
 public class Agent {
 
 	private final static Logger LOGGER = Logger.getLogger(Agent.class.getName());
 
-	private String logFilePath = "src/main/resources/logfile.log";
-	private long defaultWaitInterval = 2000;
-	private int defaultChunkSize = 4;
-	private String defaultAgentId = "agent1";
+	@Value("${logFilePath}")
+	private String logFilePath;
+	@Value("${defaultWaitInterval}")
+	private Long defaultWaitInterval;
+	@Value("${defaultChunkSize}")
+	private Integer defaultChunkSize;
+	@Value("${aggregationServiceUri}")
+	private String aggregationServiceUri;
+	@Value("${maxSleepingTimes}")
+	private int maxSleepingTimes;
+	@Value("${defaultAgentId}")
 	private String agentId;
-	private String aggregationServiceUri = "http://localhost:8080/logAggregation/";
-	private int maxSleepingTimes = 10;
+	
 	int chunkSequenceNumber;
 
 	public Agent() {
-		this.agentId = defaultAgentId;
-	}
 
-	public Agent(String agentId) {
-		this.agentId = agentId;
 	}
 
 	public void run() {
-		LOGGER.info("Log Forwarding Agent now running!");
+		LOGGER.info("Log Forwarding Agent now running! agentId: " + agentId);
 		BufferedReader bufferedReader = null;
 		try {
 			bufferedReader = new BufferedReader(new FileReader(logFilePath));
@@ -89,7 +103,8 @@ public class Agent {
 	}
 
 	private void invokeAggregationService(String content) {
-		LOGGER.info("Invoking log aggregation service, sending the following chunk:\n " + content);
+		// Add handling for 409
+		LOGGER.info("Invoking log aggregation service, sending the following chunk:\n" + content);
 		RestTemplate restTemplate = new RestTemplate(new SimpleClientHttpRequestFactory());
 		LogChunk chunk = new LogChunk(content, chunkSequenceNumber, agentId);
 		List<HttpMessageConverter<?>> messageConverters = new ArrayList<HttpMessageConverter<?>>();
@@ -97,4 +112,19 @@ public class Agent {
 		restTemplate.setMessageConverters(messageConverters);
 		restTemplate.postForObject(aggregationServiceUri, chunk, LogChunk.class);
 	}
+	
+	@Bean
+	public static PropertySourcesPlaceholderConfigurer propertySourcesPlaceholderConfigurer() {
+		return new PropertySourcesPlaceholderConfigurer();
+	}
+	
+	public String getAgentId() {
+		return agentId;
+	}
+	
+	public void setAgentId(String agentId) {
+		this.agentId = agentId;
+	}
+	
+
 }

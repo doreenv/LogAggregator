@@ -9,51 +9,68 @@ import java.util.Iterator;
 import java.util.TreeSet;
 import java.util.logging.Logger;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 
 import log.aggregation.exception.DuplicateLineReceivedException;
 import log.aggregation.exception.TooManyPendingChunksException;
 import log.dto.LogChunk;
 
-// TODO add javadocs to everything
 /**
  * @author doreenvanunu
  * 
- * A service that recreates log files based on log chunks received from a given agent
+ *         A service that recreates log files based on log chunks received from
+ *         a given agent
  */
+@Configuration
+@PropertySource("classpath:service.properties")
 public class LogAggregationService {
-	
+
 	private final static Logger LOGGER = Logger.getLogger(LogAggregationService.class.getName());
-	
+
 	/**
-	 * This collection holds chunks that were received out of order, so that a previous chunk is missing; 
-	 * those will be written to the log in order once the missing chunk is received
+	 * This collection holds chunks that were received out of order, so that a
+	 * previous chunk is missing; those will be written to the log in order once the
+	 * missing chunk is received
 	 */
 	private TreeSet<LogChunk> chunksReceivedAndPending;
-	private int latestSequenceReceived;
-	private int defaultMaxPendingChunks = 5;
-	private int defaultRequestResendLimit = 100;
-	private String defaultDir = "src/main/resources/";
+	@Value("${defaultMaxPendingChunks}")
+	private Integer defaultMaxPendingChunks;
+	@Value("${defaultRequestResendLimit}")
+	private Integer defaultRequestResendLimit;
+	@Value("${defaultDir}")
+	private String defaultDir;
+	private int latestSequenceReceived = -1;
 	private BufferedWriter writer;
-	// TODO get from spring config
-	
-	/**
-	 * Create a new LogAggregationService
-	 * 
-	 * @param agentId
-	 * @throws IOException
-	 */
-	public LogAggregationService(String agentId) throws IOException {
+
+	@Bean
+	public static PropertySourcesPlaceholderConfigurer propertySourcesPlaceholderConfigurer() {
+		return new PropertySourcesPlaceholderConfigurer();
+	}
+
+	public LogAggregationService() {
 		chunksReceivedAndPending = new TreeSet<LogChunk>(new Comparator<LogChunk>() {
 			public int compare(LogChunk chunk1, LogChunk chunk2) {
 				return chunk1.getSequenceNumber() - chunk2.getSequenceNumber();
 			}
 		});
-		
+	}
+	
+	@PostConstruct
+	public void initializeTargetFile() {
 		File folder = new File(defaultDir);
 		if (!folder.exists()) {
 			folder.mkdirs();
 		}
+	}
+
+	public void setAgentId(String agentId) throws IOException {
 		File logFile = new File(defaultDir + "/" + agentId + ".log");
 		if (!logFile.exists()) {
 			logFile.createNewFile();
@@ -61,16 +78,20 @@ public class LogAggregationService {
 		writer = new BufferedWriter(new FileWriter(logFile, true));
 	}
 	
+
+
 	/**
-	 * Adds a new log chunk to the log file. If chunk is not received in order - if previous chunks are missing - chunk writing will be pended until the previous
+	 * Adds a new log chunk to the log file. If chunk is not received in order - if
+	 * previous chunks are missing - chunk writing will be pended until the previous
 	 * missing chunks are received. They will then be written to the file in order
 	 * 
-	 * @param chunk 
+	 * @param chunk
 	 * @throws TooManyPendingChunksException
-	 * @throws IOException 
-	 * @throws DuplicateLineReceivedException 
+	 * @throws IOException
+	 * @throws DuplicateLineReceivedException
 	 */
-	public void addLogChunk(LogChunk chunk) throws TooManyPendingChunksException, IOException, DuplicateLineReceivedException {
+	public void addLogChunk(LogChunk chunk)
+			throws TooManyPendingChunksException, IOException, DuplicateLineReceivedException {
 		LOGGER.fine("Latest sequence received: " + latestSequenceReceived);
 		if (latestSequenceReceived + 1 < chunk.getSequenceNumber()) {
 			chunksReceivedAndPending.add(chunk);
@@ -90,7 +111,8 @@ public class LogAggregationService {
 				}
 			}
 		} else if (latestSequenceReceived > chunk.getSequenceNumber()) {
-			LOGGER.info("Received duplicate chunk. Latest chunk received: " + latestSequenceReceived +  ", current chunk sequence: " + chunk.getSequenceNumber());
+			LOGGER.info("Received duplicate chunk. Latest chunk received: " + latestSequenceReceived
+					+ ", current chunk sequence: " + chunk.getSequenceNumber());
 			throw new DuplicateLineReceivedException();
 		}
 		if (chunksReceivedAndPending.size() > defaultRequestResendLimit) {
@@ -99,18 +121,18 @@ public class LogAggregationService {
 		if (chunksReceivedAndPending.size() > defaultMaxPendingChunks) {
 			throw new TooManyPendingChunksException();
 		}
-		
+
 		LOGGER.finest("Printing all pending chunks");
 		Iterator<LogChunk> iterator = chunksReceivedAndPending.iterator();
 		while (iterator.hasNext()) {
 			LogChunk pendingChunk = iterator.next();
 			LOGGER.finest(Integer.toString(pendingChunk.getSequenceNumber()));
 		}
-		
+
 		writer.flush();
-	}	
-	
-	@PreDestroy 
+	}
+
+	@PreDestroy
 	public void releaseResources() throws IOException {
 		writer.close();
 	}
