@@ -3,8 +3,8 @@
 #### The agents tail log files and sending to the service to recreate the files on the server side. <BR />
 <br />
 To run the service: <BR/><BR />
-...mvn package && java -jar target/service-0.0.1-SNAPSHOT.jar <BR />
+mvn package && java -jar target/service-0.0.1-SNAPSHOT.jar <BR />
 <BR />
 To run the agent: <BR /><BR/>
- ...mvn exec:java
+ mvn exec:java
 
