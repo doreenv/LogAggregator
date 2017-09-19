@@ -6,7 +6,12 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,12 +28,15 @@ import log.dto.LogChunk;
 
 @RestController
 @RequestMapping("/logAggregation")
+@Configuration
+@PropertySource("classpath:service.properties")
 public class LogAggregationController {
 	
 	private final static Logger LOGGER = Logger.getLogger(LogAggregationController.class.getName());
 
-	// TODO periodically kill services that weren't active in a while
 	private Map<String, LogAggregationService> services;
+	@Value("${elapsedTimeLimit}")
+	int elapsedTimeLimit;
 	
 	@Autowired
 	private ApplicationContext appContext;
@@ -45,7 +53,8 @@ public class LogAggregationController {
 	@RequestMapping(value = "/", method = RequestMethod.POST)
 	public ResponseEntity<?> receiveLogChunk(@RequestBody LogChunk chunk, UriComponentsBuilder ucBuilder) {
 		LOGGER.info("Received a chunk! " + chunk.toString());
-
+		
+        long startTime = System.nanoTime();
 		LogAggregationService service = services.get(chunk.getAgentId());
         HttpHeaders headers = new HttpHeaders();
         headers.setLocation(ucBuilder.path("/logAggregation/").build().toUri());
@@ -58,15 +67,26 @@ public class LogAggregationController {
 				services.put(chunk.getAgentId(), service);
 			}
 			service.addLogChunk(chunk);
-			response = new ResponseEntity<String>(headers, HttpStatus.CREATED);
+	        long elapsedTime = System.nanoTime() - startTime;
+	        if (elapsedTime > elapsedTimeLimit) {
+        			response = new ResponseEntity<String>(headers, HttpStatus.TOO_MANY_REQUESTS);    			
+	        } else {
+	        		response = new ResponseEntity<String>(headers, HttpStatus.CREATED);
+	        }
+
 		} catch (TooManyPendingChunksException e) {
 			response = new ResponseEntity<String>(headers, HttpStatus.PRECONDITION_FAILED);
 		} catch (IOException e) {
 			response = new ResponseEntity<String>(headers, HttpStatus.INTERNAL_SERVER_ERROR);
 		} catch (DuplicateLineReceivedException e) {
-			response = new ResponseEntity<String>(headers, HttpStatus.CONFLICT);
+			response = new ResponseEntity<String>(String.valueOf(e.getLatestSequenceReceived()), headers, HttpStatus.CONFLICT);
 		}
 
         return response;
+	}
+	
+	@Bean
+	public static PropertySourcesPlaceholderConfigurer propertySourcesPlaceholderConfigurer() {
+		return new PropertySourcesPlaceholderConfigurer();
 	}
 }
