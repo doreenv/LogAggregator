@@ -32,8 +32,8 @@ public class LogAggregationServiceTest extends TestCase {
 		Mockito.doNothing().when(logAggregationService).initializeTargetFile();
 		Mockito.doNothing().when(logAggregationService).setAgentId(Mockito.anyString());	
 		Mockito.doCallRealMethod().when(logAggregationService).addLogChunk(Mockito.any(LogChunk.class));
-	    ReflectionTestUtils.setField(logAggregationService, "defaultRequestResendLimit", 100);
-	    ReflectionTestUtils.setField(logAggregationService, "defaultMaxPendingChunks", 5);	    
+	    	ReflectionTestUtils.setField(logAggregationService, "defaultRequestResendLimit", 100);
+	    	ReflectionTestUtils.setField(logAggregationService, "defaultMaxPendingChunks", 5);	    
 		LogChunk chunk = new LogChunk("Sample content", 0, "testAgent");
 		StringWriter stringWriter = new StringWriter();
 		logAggregationService.setWriter(stringWriter);
